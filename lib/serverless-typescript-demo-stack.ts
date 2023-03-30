@@ -9,13 +9,14 @@ import {
   aws_logs,
   aws_lambda,
 } from "aws-cdk-lib";
+import { Cors } from "aws-cdk-lib/aws-apigateway";
 
 export class ServerlessTypescriptDemoStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    const productsTable = new aws_dynamodb.Table(this, "Products", {
-      tableName: "Products",
+    const tasksTable = new aws_dynamodb.Table(this, "Tasks", {
+      tableName: "Tasks",
       partitionKey: {
         name: "id",
         type: aws_dynamodb.AttributeType.STRING,
@@ -31,7 +32,7 @@ export class ServerlessTypescriptDemoStack extends Stack {
       POWERTOOLS_LOGGER_SAMPLE_RATE: '0.01',
       POWERTOOLS_LOGGER_LOG_EVENT: 'true',
       POWERTOOLS_METRICS_NAMESPACE: 'AwsSamples',
-  };
+    };
 
     const esBuildSettings = {
       minify: true
@@ -42,7 +43,7 @@ export class ServerlessTypescriptDemoStack extends Stack {
       runtime: aws_lambda.Runtime.NODEJS_16_X,
       memorySize: 256,
       environment: {
-        TABLE_NAME: productsTable.tableName,
+        TABLE_NAME: tasksTable.tableName,
         ...envVariables
       },
       logRetention: aws_logs.RetentionDays.ONE_WEEK,
@@ -50,83 +51,87 @@ export class ServerlessTypescriptDemoStack extends Stack {
       bundling: esBuildSettings
     }
 
-    const getProductsFunction = new aws_lambda_nodejs.NodejsFunction(
+    const getTasksFunction = new aws_lambda_nodejs.NodejsFunction(
       this,
-      "GetProductsFunction",
+      "GetTasksFunction",
       {
         awsSdkConnectionReuse: true,
-        entry: "./src/api/get-products.ts",
+        entry: "./src/api/get-tasks.ts",
         ...functionSettings
       }
     );
 
-    const getProductFunction = new aws_lambda_nodejs.NodejsFunction(
+    const getTaskFunction = new aws_lambda_nodejs.NodejsFunction(
       this,
-      "GetProductFunction",
+      "GetTaskFunction",
       {
         awsSdkConnectionReuse: true,
-        entry: "./src/api/get-product.ts",
+        entry: "./src/api/get-task.ts",
         ...functionSettings
       }
     );
 
-    const putProductFunction = new aws_lambda_nodejs.NodejsFunction(
+    const putTaskFunction = new aws_lambda_nodejs.NodejsFunction(
       this,
-      "PutProductFunction",
+      "PutTaskFunction",
       {
         awsSdkConnectionReuse: true,
-        entry: "./src/api/put-product.ts",
+        entry: "./src/api/put-task.ts",
         ...functionSettings
       }
     );
 
-    const deleteProductFunction = new aws_lambda_nodejs.NodejsFunction(
+    const deleteTaskFunction = new aws_lambda_nodejs.NodejsFunction(
       this,
-      "DeleteProductsFunction",
+      "DeleteTasksFunction",
       {
         awsSdkConnectionReuse: true,
-        entry: "./src/api/delete-product.ts",
+        entry: "./src/api/delete-task.ts",
         ...functionSettings
       }
     );
 
-    productsTable.grantReadData(getProductsFunction);
-    productsTable.grantReadData(getProductFunction);
-    productsTable.grantWriteData(deleteProductFunction);
-    productsTable.grantWriteData(putProductFunction);
+    tasksTable.grantReadData(getTasksFunction);
+    tasksTable.grantReadData(getTaskFunction);
+    tasksTable.grantWriteData(deleteTaskFunction);
+    tasksTable.grantWriteData(putTaskFunction);
 
-    const api = new aws_apigateway.RestApi(this, "ProductsApi", {
-      restApiName: "ProductsApi",
-      deployOptions: {
+    const api = new aws_apigateway.RestApi(this, "TasksApi", {
+      restApiName: "TasksApi",
+      defaultCorsPreflightOptions: {
+        allowOrigins: Cors.ALL_ORIGINS,
+      },
+      deployOptions: {  
         tracingEnabled: true,
         dataTraceEnabled: true,
         loggingLevel: aws_apigateway.MethodLoggingLevel.INFO,
         metricsEnabled: true,
+        // stageName: 'v1',
       }
     });
 
-    const products = api.root.addResource("products");
-    products.addMethod(
+    const tasks = api.root.addResource("tasks");
+    tasks.addMethod(
       "GET",
-      new aws_apigateway.LambdaIntegration(getProductsFunction)
+      new aws_apigateway.LambdaIntegration(getTasksFunction)
     );
 
-    const product = products.addResource("{id}");
-    product.addMethod(
+    const task = tasks.addResource("{id}");
+    task.addMethod(
       "GET",
-      new aws_apigateway.LambdaIntegration(getProductFunction)
+      new aws_apigateway.LambdaIntegration(getTaskFunction)
     );
-    product.addMethod(
+    task.addMethod(
       "PUT",
-      new aws_apigateway.LambdaIntegration(putProductFunction)
+      new aws_apigateway.LambdaIntegration(putTaskFunction)
     );
-    product.addMethod(
+    task.addMethod(
       "DELETE",
-      new aws_apigateway.LambdaIntegration(deleteProductFunction)
+      new aws_apigateway.LambdaIntegration(deleteTaskFunction),
     );
 
     new CfnOutput(this, "ApiURL", {
-      value: `${api.url}products`,
+      value: `${api.url}tasks`,
     });
   }
 }
